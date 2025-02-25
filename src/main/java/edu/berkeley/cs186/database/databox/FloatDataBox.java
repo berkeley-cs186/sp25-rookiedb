@@ -45,7 +45,7 @@ public class FloatDataBox extends DataBox {
 
     @Override
     public int hashCode() {
-        return new Float(f).hashCode();
+        return Float.hashCode(f);
     }
 
     @Override

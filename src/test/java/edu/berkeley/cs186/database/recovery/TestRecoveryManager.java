@@ -24,6 +24,8 @@ import org.junit.rules.Timeout;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.*;
@@ -790,19 +792,20 @@ public class TestRecoveryManager {
         LSNs.add(logManager.appendToLog(new CommitTransactionLogRecord(2L, LSNs.get(6)))); // 8
         LSNs.add(logManager.appendToLog(new AbortTransactionLogRecord(3L, 0L))); // 9
         LSNs.add(logManager.appendToLog(new EndCheckpointLogRecord(
-            new HashMap<Long, Long>() {{
+            Stream.of(
                 // End checkpoint DPT
-                put(10000000001L, LSNs.get(0));
-                put(10000000002L, LSNs.get(1));
-                put(10000000003L, LSNs.get(5));
-                put(10000000004L, LSNs.get(6));
-            }},
-            new HashMap<Long, Pair<Transaction.Status, Long>>() {{
+                entry(10000000001L, LSNs.get(0)),
+                entry(10000000002L, LSNs.get(1)),
+                entry(10000000003L, LSNs.get(5)),
+                entry(10000000004L, LSNs.get(6))
+            ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+            Stream.of(
                 // End checkpoint Transaction Table
-                put(2L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(8)));
-                put(3L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(9)));
-                put(4L, new Pair<>(Transaction.Status.RUNNING, 0L));
-            }}
+                entry(2L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(8))),
+                entry(3L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(9))),
+                entry(4L, new Pair<>(Transaction.Status.RUNNING, 0L))
+            ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+
         ))); // 10
         // end/abort records from analysis=
         logManager.rewriteMasterRecord(new MasterLogRecord(LSNs.get(2)));
@@ -820,10 +823,27 @@ public class TestRecoveryManager {
 
         // check log
         Iterator<LogRecord> logs = logManager.scanFrom(20000L);
-        assertEquals(new EndTransactionLogRecord(2L, LSNs.get(8)), logs.next());
-        LogRecord abortRecord = logs.next();
-        assertEquals(new AbortTransactionLogRecord(4L, 0), abortRecord);
-        assertFalse(logs.hasNext());
+        assertTrue("Too few records after analysis", logs.hasNext());
+        LogRecord rec1 = logs.next();
+        assertTrue("Too few records after analysis", logs.hasNext());
+        LogRecord rec2 = logs.next();
+        final LogRecord abortRecord;
+        switch (rec1.type) {
+            case ABORT_TRANSACTION:
+                assertEquals(new AbortTransactionLogRecord(4L, 0), rec1);
+                assertEquals(new EndTransactionLogRecord(2L, LSNs.get(8)), rec2);
+                abortRecord = rec1;
+                break;
+            case END_TRANSACTION:
+                assertEquals(new EndTransactionLogRecord(2L, LSNs.get(8)), rec1);
+                assertEquals(new AbortTransactionLogRecord(4L, 0), rec2);
+                abortRecord = rec2;
+                break;
+            default:
+                fail("Unexpected log entry: " + rec1);
+                abortRecord = null;
+        }
+        assertFalse("Too many records after analysis", logs.hasNext());
         assertEquals(19999L, logManager.getFlushedLSN());
 
         // T1 and T2 should have ended, and been removed
@@ -869,14 +889,14 @@ public class TestRecoveryManager {
         LSNs.add(logManager.appendToLog(new AbortTransactionLogRecord(6L, 0L))); // 8
         LSNs.add(logManager.appendToLog(new EndCheckpointLogRecord(
             new HashMap<>(), // empty DPT
-            new HashMap<Long, Pair<Transaction.Status, Long>>() {{
-                put(1L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(0)));
-                put(2L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(1)));
-                put(3L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(2)));
-                put(4L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(3)));
-                put(5L, new Pair<>(Transaction.Status.RUNNING, 0L));
-                put(6L, new Pair<>(Transaction.Status.RUNNING, 0L));
-            }}
+            Stream.of(
+                entry(1L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(0))),
+                entry(2L, new Pair<>(Transaction.Status.COMMITTING, LSNs.get(1))),
+                entry(3L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(2))),
+                entry(4L, new Pair<>(Transaction.Status.ABORTING, LSNs.get(3))),
+                entry(5L, new Pair<>(Transaction.Status.RUNNING, 0L)),
+                entry(6L, new Pair<>(Transaction.Status.RUNNING, 0L))
+            ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
         ))); // 9
 
         logManager.rewriteMasterRecord(new MasterLogRecord(LSNs.get(5)));
@@ -1509,5 +1529,9 @@ public class TestRecoveryManager {
         recoveryManager.bufferManager.close();
         recoveryManager.diskSpaceManager.close();
         DummyTransaction.cleanupTransactions();
+    }
+
+    private static <K,V> Map.Entry<K,V> entry(K key, V value) {
+        return new AbstractMap.SimpleEntry<>(key, value);
     }
 }

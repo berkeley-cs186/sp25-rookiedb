@@ -45,7 +45,7 @@ public class IntDataBox extends DataBox {
 
     @Override
     public int hashCode() {
-        return new Integer(i).hashCode();
+        return Integer.hashCode(i);
     }
 
     @Override

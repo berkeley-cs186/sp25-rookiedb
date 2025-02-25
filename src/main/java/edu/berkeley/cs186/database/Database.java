@@ -25,7 +25,11 @@ import edu.berkeley.cs186.database.query.expr.Expression;
 import edu.berkeley.cs186.database.recovery.ARIESRecoveryManager;
 import edu.berkeley.cs186.database.recovery.DummyRecoveryManager;
 import edu.berkeley.cs186.database.recovery.RecoveryManager;
-import edu.berkeley.cs186.database.table.*;
+import edu.berkeley.cs186.database.table.PageDirectory;
+import edu.berkeley.cs186.database.table.Record;
+import edu.berkeley.cs186.database.table.RecordId;
+import edu.berkeley.cs186.database.table.Schema;
+import edu.berkeley.cs186.database.table.Table;
 import edu.berkeley.cs186.database.table.stats.TableStats;
 
 import java.io.*;

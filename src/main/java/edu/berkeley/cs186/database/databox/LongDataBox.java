@@ -45,7 +45,7 @@ public class LongDataBox extends DataBox {
 
     @Override
     public int hashCode() {
-        return new Long(l).hashCode();
+        return Long.hashCode(l);
     }
 
     @Override
